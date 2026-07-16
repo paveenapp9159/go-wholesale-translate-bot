@@ -11,7 +11,7 @@ import google.generativeai as genai
 app = Flask(__name__)
 
 # 🔗 ลิงก์ดึงข้อมูลรูปแบบ Excel (.xlsx) ของ Go Wholesale (พี่อย่าลืมเอา ID ตารางใหม่มาเปลี่ยนตรงนี้ด้วยนะครับ)
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1TNMtxHILO2ZAiwqFErliePky_9Y_Cy3bP31goGWF5rc/edit?gid=1694273177#gid=1694273177"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1TNMtxHILO2ZAiwqFErliePky_9Y_Cy3bP31goGWF5rc/export?format=xlsx"
 
 CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN', '')
 CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET', '')
