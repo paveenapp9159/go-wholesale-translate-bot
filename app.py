@@ -1,7 +1,7 @@
 import os
 import requests
 import io
-import pandas as pd
+from openpyxl import load_workbook
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
@@ -11,7 +11,7 @@ import google.generativeai as genai
 app = Flask(__name__)
 
 # 🔗 ลิงก์ดึงข้อมูลรูปแบบ Excel (.xlsx) ของ Go Wholesale (พี่อย่าลืมเอา ID ตารางใหม่มาเปลี่ยนตรงนี้ด้วยนะครับ)
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1TNMtxHILO2ZAiwqFErliePky_9Y_Cy3bP31goGWF5rc/edit?usp=sharing"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1TNMtxHILO2ZAiwqFErliePky_9Y_Cy3bP31goGWF5rc/edit?gid=1694273177#gid=1694273177"
 
 CHANNEL_ACCESS_TOKEN = os.environ.get('CHANNEL_ACCESS_TOKEN', '')
 CHANNEL_SECRET = os.environ.get('CHANNEL_SECRET', '')
@@ -24,21 +24,29 @@ handler = WebhookHandler(CHANNEL_SECRET)
 STORE_MANUAL_CACHE = ""
 
 def load_manual_to_cache():
-    """ฟังก์ชันโหลดข้อมูลล่วงหน้า พร้อมระบบป้องกันหาก Google Sheets บล็อก (404)"""
+    """ฟังก์ชันโหลดข้อมูลล่วงหน้าผ่าน openpyxl โดยตรง (เบาและไม่เออร์เรอร์บน Render)"""
     global STORE_MANUAL_CACHE
     try:
         print("📥 Loading Go Wholesale Google Sheets into cache...")
         response = requests.get(SHEET_URL, timeout=15)
         if response.status_code == 200:
-            excel_file = pd.ExcelFile(io.BytesIO(response.content))
+            wb = load_workbook(filename=io.BytesIO(response.content), data_only=True)
             manual_text = "Here is the Official Go Wholesale Training Manual, Rules, Policies, and SOP:\n"
 
-            for sheet_name in excel_file.sheet_names:
-                df = excel_file.parse(sheet_name)
+            for sheet_name in wb.sheetnames:
+                ws = wb[sheet_name]
                 manual_text += f"\n--- Section/Tab: {sheet_name} ---\n"
-
-                for _, row in df.iterrows():
-                    row_data = [f"{col}: {val}" for col, val in row.items() if pd.notna(val) and str(val).strip() != 'nan']
+                
+                # อ่านหัวตาราง (Row แรก)
+                headers = [cell.value for cell in ws[1]]
+                
+                # อ่านข้อมูลในแถวถัดๆ ไป
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    row_data = []
+                    for col_idx, val in enumerate(row):
+                        if val is not None and str(val).strip() != "" and str(val).strip().lower() != "nan":
+                            col_name = headers[col_idx] if col_idx < len(headers) else f"Col{col_idx+1}"
+                            row_data.append(f"{col_name}: {val}")
                     if row_data:
                         manual_text += f"- " + ", ".join(row_data) + "\n"
 
@@ -46,9 +54,9 @@ def load_manual_to_cache():
             print("🟢 Google Sheets cached successfully!")
             return True
         else:
-            print(f"⚠️ Failed to fetch Google Sheets. Status code: {response.status_code}. Using existing cache if available.")
+            print(f"⚠️ Failed to fetch Google Sheets. Status code: {response.status_code}.")
     except Exception as e:
-        print(f"⚠️ Error caching Google Sheets: {e}. Keeping existing cache.")
+        print(f"⚠️ Error caching Google Sheets: {e}")
     return False
 
 def get_ai_response(user_text):
@@ -81,7 +89,6 @@ def get_ai_response(user_text):
         {STORE_MANUAL_CACHE}
         """
 
-        # เลือกใช้โมเดลรุ่นเสถียรและประหยัดโควตาที่สุด
         model = genai.GenerativeModel(
             model_name="gemini-flash-lite-latest",
             system_instruction=system_instruction
